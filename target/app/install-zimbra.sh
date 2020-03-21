@@ -133,12 +133,12 @@ fi
 # download zimbra
 echo
 echo "Downloading Zimbra..."
-wget -O /install/zcs.tgz $ZIMBRA_DOWNLOAD_URL
-CALC_HASH=`sha256sum zcs.tgz | cut -d ' ' -f1`
-if [ "$CALC_HASH" != "$ZIMBRA_DOWNLOAD_HASH" ]; then
-    echo "Downloaded file is corrupt!"
-    exit 1
-fi
+#wget -O /install/zcs.tgz $ZIMBRA_DOWNLOAD_URL
+#CALC_HASH=`sha256sum /install/zcs.tgz | cut -d ' ' -f1`
+#if [ "$CALC_HASH" != "$ZIMBRA_DOWNLOAD_HASH" ]; then
+#    echo "Downloaded file is corrupt!"
+#    exit 1
+#fi
 
 echo
 echo "Extracting Zimbra..."
@@ -146,6 +146,7 @@ tar -C /install/zcs -xvzf /install/zcs.tgz --strip-components=1
 
 echo
 echo "Installing Zimbra..."
+cd /install/zcs
 . /install/zcs/install.sh -s < ${SCRIPTPATH}/installZimbra-keystrokes
 
 echo
