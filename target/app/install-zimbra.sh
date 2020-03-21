@@ -2,6 +2,121 @@
 
 set -e
 
+mkdir -p /install/{auditswatch,zcs}
+
+HOSTNAME=$(hostname -a)
+DOMAIN=$(hostname -d)
+CONTAINERIP=$(ip addr | grep 'state UP' -A2 | tail -n1 | awk '{print $2}' | cut -f1  -d'/')
+RANDOMHAM=$(date +%s|sha256sum|base64|head -c 10)
+RANDOMSPAM=$(date +%s|sha256sum|base64|head -c 10)
+RANDOMVIRUS=$(date +%s|sha256sum|base64|head -c 10)
+
+##Creating the Zimbra Collaboration Config File ##
+touch /install/installZimbraScript
+cat <<EOF > /install/installZimbraScript
+AVDOMAIN="$DOMAIN"
+AVUSER="admin@$DOMAIN"
+CREATEADMIN="admin@$DOMAIN"
+CREATEADMINPASS="$PASSWORD"
+CREATEDOMAIN="$DOMAIN"
+DOCREATEADMIN="yes"
+DOCREATEDOMAIN="yes"
+DOTRAINSA="yes"
+EXPANDMENU="no"
+HOSTNAME="$HOSTNAME.$DOMAIN"
+HTTPPORT="8080"
+HTTPPROXY="TRUE"
+HTTPPROXYPORT="80"
+HTTPSPORT="8443"
+HTTPSPROXYPORT="443"
+IMAPPORT="7143"
+IMAPPROXYPORT="143"
+IMAPSSLPORT="7993"
+IMAPSSLPROXYPORT="993"
+INSTALL_WEBAPPS="service zimlet zimbra zimbraAdmin"
+JAVAHOME="/opt/zimbra/common/lib/jvm/java"
+LDAPAMAVISPASS="$PASSWORD"
+LDAPPOSTPASS="$PASSWORD"
+LDAPROOTPASS="$PASSWORD"
+LDAPADMINPASS="$PASSWORD"
+LDAPREPPASS="$PASSWORD"
+LDAPBESSEARCHSET="set"
+LDAPDEFAULTSLOADED="1"
+LDAPHOST="$HOSTNAME.$DOMAIN"
+LDAPPORT="389"
+LDAPREPLICATIONTYPE="master"
+LDAPSERVERID="2"
+MAILBOXDMEMORY="512"
+MAILPROXY="TRUE"
+MODE="both"
+MYSQLMEMORYPERCENT="30"
+POPPORT="7110"
+POPPROXYPORT="110"
+POPSSLPORT="7995"
+POPSSLPROXYPORT="995"
+PROXYMODE="https"
+REMOVE="no"
+RUNARCHIVING="no"
+RUNAV="yes"
+RUNCBPOLICYD="no"
+RUNDKIM="yes"
+RUNSA="yes"
+RUNVMHA="no"
+SERVICEWEBAPP="yes"
+SMTPDEST="admin@$DOMAIN"
+SMTPHOST="$HOSTNAME.$DOMAIN"
+SMTPNOTIFY="yes"
+SMTPSOURCE="admin@$DOMAIN"
+SNMPNOTIFY="yes"
+SNMPTRAPHOST="$HOSTNAME.$DOMAIN"
+SPELLURL="http://$HOSTNAME.$DOMAIN:7780/aspell.php"
+STARTSERVERS="yes"
+SYSTEMMEMORY="3.8"
+TRAINSAHAM="ham.$RANDOMHAM@$DOMAIN"
+TRAINSASPAM="spam.$RANDOMSPAM@$DOMAIN"
+UIWEBAPPS="yes"
+UPGRADE="yes"
+USEKBSHORTCUTS="TRUE"
+USESPELL="yes"
+VERSIONUPDATECHECKS="TRUE"
+VIRUSQUARANTINE="virus-quarantine.$RANDOMVIRUS@$DOMAIN"
+ZIMBRA_REQ_SECURITY="yes"
+ldap_bes_searcher_password="$PASSWORD"
+ldap_dit_base_dn_config="cn=zimbra"
+ldap_nginx_password="$PASSWORD"
+ldap_url="ldap://$HOSTNAME.$DOMAIN:389"
+mailboxd_directory="/opt/zimbra/mailboxd"
+mailboxd_keystore="/opt/zimbra/mailboxd/etc/keystore"
+mailboxd_keystore_password="$PASSWORD"
+mailboxd_server="jetty"
+mailboxd_truststore="/opt/zimbra/common/lib/jvm/java/jre/lib/security/cacerts"
+mailboxd_truststore_password="changeit"
+postfix_mail_owner="postfix"
+postfix_setgid_group="postdrop"
+ssl_default_digest="sha256"
+zimbraDNSMasterIP=""
+zimbraDNSTCPUpstream="no"
+zimbraDNSUseTCP="yes"
+zimbraDNSUseUDP="yes"
+zimbraDefaultDomainName="$DOMAIN"
+zimbraFeatureBriefcasesEnabled="Enabled"
+zimbraFeatureTasksEnabled="Enabled"
+zimbraIPMode="ipv4"
+zimbraMailProxy="FALSE"
+zimbraMtaMyNetworks="127.0.0.0/8 $CONTAINERIP/32 [::1]/128 [fe80::]/64"
+zimbraPrefTimeZoneId="America/Los_Angeles"
+zimbraReverseProxyLookupTarget="TRUE"
+zimbraVersionCheckInterval="1d"
+zimbraVersionCheckNotificationEmail="admin@$DOMAIN"
+zimbraVersionCheckNotificationEmailFrom="admin@$DOMAIN"
+zimbraVersionCheckSendNotifications="TRUE"
+zimbraWebProxy="FALSE"
+zimbra_ldap_userdn="uid=zimbra,cn=admins,cn=zimbra"
+zimbra_require_interprocess_security="1"
+zimbra_server_hostname="$HOSTNAME.$DOMAIN"
+INSTALL_PACKAGES="zimbra-core zimbra-ldap zimbra-logger zimbra-mta zimbra-snmp zimbra-store zimbra-apache zimbra-spell zimbra-memcached zimbra-proxy"
+EOF
+
 ZIMBRA_DOWNLOAD_URL="https://files.zimbra.com/downloads/8.8.15_GA/zcs-8.8.15_GA_3869.UBUNTU18_64.20190918004220.tgz"
 ZIMBRA_DOWNLOAD_HASH="28d39a32328db0586d35cc7a461e92a43939aebe6f0ab58ee9225cb8824835db"
 SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
@@ -18,9 +133,7 @@ fi
 # download zimbra
 echo
 echo "Downloading Zimbra..."
-mkdir -p /install
-cd /install
-wget -O zcs.tgz $ZIMBRA_DOWNLOAD_URL
+wget -O /install/zcs.tgz $ZIMBRA_DOWNLOAD_URL
 CALC_HASH=`sha256sum zcs.tgz | cut -d ' ' -f1`
 if [ "$CALC_HASH" != "$ZIMBRA_DOWNLOAD_HASH" ]; then
     echo "Downloaded file is corrupt!"
@@ -29,13 +142,15 @@ fi
 
 echo
 echo "Extracting Zimbra..."
-mkdir zcs
-tar -C zcs -xvzf zcs.tgz --strip-components=1
+tar -C /install/zcs -xvzf /install/zcs.tgz --strip-components=1
 
 echo
 echo "Installing Zimbra..."
-cd zcs
-./install.sh
+. /install/zcs/install.sh -s < ${SCRIPTPATH}/installZimbra-keystrokes
+
+echo
+echo "Installing Zimbra Collaboration injecting the configuration"
+sudo -u zimbra /opt/zimbra/libexec/zmsetup.pl -c /install/installZimbraScript
 
 echo
 echo "Retrieving some information needed for further steps..."
@@ -46,7 +161,6 @@ echo
 echo "Configuring Zimbra's brute-force detector (auditswatch) to send notifications to $ADMIN_EMAIL..."
 # download and install missing auditswatch file
 # ----------------------------------------------------------------------------------------------------------
-mkdir -p /install/auditswatch
 cd /install/auditswatch
 wget -O auditswatch http://bugzilla-attach.zimbra.com/attachment.cgi?id=66723
 mv auditswatch  /opt/zimbra/libexec/auditswatch
